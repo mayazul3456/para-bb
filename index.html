@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flores naciendo</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 70%, #0d2326 0%, #04100f 55%, #01060a 100%);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  #sky .star { position: absolute; border-radius: 50%; background: #fff; }
+  #sky .moon-glow {
+    position: absolute; top: 8%; right: 12%; width: 90px; height: 90px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(200,235,255,.22) 0%, rgba(200,235,255,0) 70%);
+  }
+  #scene { position: relative; z-index: 1; width: 100vw; height: 100vh; display: block; touch-action: manipulation; }
+  #replay {
+    position: fixed; top: 14px; right: 14px; z-index: 2;
+    padding: 8px 14px; border-radius: 999px;
+    border: 1px solid rgba(255, 226, 90, .5);
+    background: rgba(255, 226, 90, .08);
+    color: #ffe45a; font-size: 14px; cursor: pointer;
+    backdrop-filter: blur(4px);
+  }
+  #replay:hover { background: rgba(255, 226, 90, .2); }
+  #hint {
+    position: fixed; left: 0; right: 0; bottom: 10px;
+    text-align: center; font-size: 12px; color: rgba(160, 230, 220, .55);
+    pointer-events: none;
+  }
+
+  /* ---------- Estado: portada / escena ---------- */
+  #scene { opacity: 0; pointer-events: none; transition: opacity 1.4s ease; }
+  body.escena #scene { opacity: 1; pointer-events: auto; }
+  #replay, #hint, .mini { opacity: 0; pointer-events: none; transition: opacity .8s ease, background .2s; }
+  body.escena #replay, body.escena .mini { opacity: 1; pointer-events: auto; }
+  body.escena #hint { opacity: 1; }
+
+  .mini {
+    position: fixed; top: 14px; z-index: 2; width: 38px; height: 38px;
+    border-radius: 50%; border: 1px solid rgba(255, 226, 90, .5);
+    background: rgba(255, 226, 90, .08); color: #ffe45a; font-size: 17px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px); padding: 0;
+  }
+  .mini:hover { background: rgba(255, 226, 90, .2); }
+  #btnMusica { left: 14px; }
+  #btnInicio { left: 60px; }
+
+  /* ---------- Portada ---------- */
+  #cover {
+    position: fixed; inset: 0; z-index: 5; box-sizing: border-box; padding: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    background:
+      radial-gradient(ellipse at 25% 15%, rgba(255, 200, 90, .18), transparent 55%),
+      radial-gradient(ellipse at 80% 85%, rgba(40, 210, 190, .22), transparent 55%),
+      linear-gradient(160deg, rgba(26, 12, 52, .88), rgba(4, 30, 38, .92));
+    transition: opacity 1.2s ease, visibility 1.2s;
+  }
+  body.escena #cover { opacity: 0; visibility: hidden; pointer-events: none; }
+  #hearts { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .heart {
+    position: absolute; bottom: -40px; color: rgba(255, 205, 120, .55);
+    text-shadow: 0 0 10px rgba(255, 190, 80, .7);
+    animation: floatUp linear infinite;
+  }
+  @keyframes floatUp {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: translateY(-115vh) rotate(40deg); opacity: 0; }
+  }
+  #cover > *:not(#hearts) { position: relative; z-index: 1; }
+
+  .card {
+    width: min(62vw, 240px); padding: 10px 10px 12px; border-radius: 18px;
+    background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 230, 150, .35);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 40px rgba(255, 210, 80, .22), 0 20px 50px rgba(0, 0, 0, .5);
+    opacity: 0; transform: translateY(24px) scale(.94);
+  }
+  #cover.go .card { animation: cardIn 1.3s .3s cubic-bezier(.2, .9, .3, 1.15) forwards; }
+  @keyframes cardIn { to { opacity: 1; transform: none; } }
+
+  .photo {
+    position: relative; aspect-ratio: 4 / 5; border-radius: 12px; overflow: hidden;
+    background: rgba(255, 255, 255, .06); cursor: pointer;
+  }
+  .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  .photo.tiene img { display: block; }
+  .photo .vacia {
+    position: absolute; inset: 8px; border: 1.5px dashed rgba(255, 230, 150, .5); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    color: rgba(255, 233, 168, .8); font-size: 14px; padding: 12px;
+  }
+  .photo.tiene .vacia { display: none; }
+
+  #msg {
+    min-height: 2.6em; max-width: 90vw; text-align: center;
+    font: italic clamp(21px, 6vw, 28px) Georgia, "Times New Roman", serif;
+    color: #ffe9a8; text-shadow: 0 0 14px rgba(255, 210, 80, .55);
+  }
+  #msg::after {
+    content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 3px;
+    background: #ffe9a8; vertical-align: -.12em; animation: caret 1s steps(1) infinite;
+  }
+  @keyframes caret { 50% { opacity: 0; } }
+
+  #continuar {
+    padding: 11px 36px; border-radius: 999px; cursor: pointer; font-size: 16px; color: #ffe45a;
+    border: 1px solid rgba(255, 226, 90, .7);
+    background: linear-gradient(135deg, rgba(255, 215, 80, .25), rgba(255, 160, 60, .2));
+    box-shadow: 0 0 22px rgba(255, 210, 80, .28);
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+    transition: opacity .9s ease, transform .9s ease;
+  }
+  #continuar.show { opacity: 1; transform: none; pointer-events: auto; }
+  #continuar:hover { background: rgba(255, 215, 80, .35); }
+</style>
+</head>
+<body>
+<div id="sky"></div>
+<svg id="scene" viewBox="0 0 400 500" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="stemG" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#0b6b6e"/>
+      <stop offset="1" stop-color="#3fe0c8"/>
+    </linearGradient>
+    <linearGradient id="leafG" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#0d7f78"/>
+      <stop offset="1" stop-color="#4ee6a8"/>
+    </linearGradient>
+    <linearGradient id="fernG" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#0a4a57"/>
+      <stop offset="1" stop-color="#27cdbb"/>
+    </linearGradient>
+    <linearGradient id="grassG" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#0a3a2a"/>
+      <stop offset="1" stop-color="#3fd37e"/>
+    </linearGradient>
+    <linearGradient id="petalG" x1="0" y1="0" x2="0" y2="-1">
+      <stop offset="0" stop-color="#ffb81c"/>
+      <stop offset="0.55" stop-color="#ffd83a"/>
+      <stop offset="1" stop-color="#fff29a"/>
+    </linearGradient>
+    <radialGradient id="haloG">
+      <stop offset="0" stop-color="#ffe14d" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#ffe14d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="centerG">
+      <stop offset="0" stop-color="#fff7c2"/>
+      <stop offset="1" stop-color="#ffa800"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g id="garden"></g>
+  <g id="fireflies"></g>
+</svg>
+<button id="btnMusica" class="mini" title="Música">🔊</button>
+<button id="btnInicio" class="mini" title="Volver al inicio">⌂</button>
+<button id="replay">Volver a sembrar</button>
+
+<!-- Pon tu canción en la misma carpeta con el nombre cancion.mp3 (o cambia el src) -->
+<audio id="musica" src="123m.mp3"></audio>
+
+<!-- Portada -->
+<div id="cover" class="go">
+  <div id="hearts"></div>
+  <div class="card">
+    <!-- Pon tu foto en la misma carpeta con el nombre foto.jpg (o toca la tarjeta para elegirla) -->
+    <div class="photo" id="photo" title="Toca para elegir una foto">
+      <img id="foto" alt="Foto">
+      <div class="vacia">Toca aquí para elegir tu foto</div>
+    </div>
+    <input type="file" id="fileFoto" accept="imagen2.jpg" hidden>
+  </div>
+  <div id="msg"></div>
+  <button id="continuar">Continuar</button>
+</div>
+<div id="hint">Haz clic en la escena para sembrar más flores </div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('scene');
+const garden = document.getElementById('garden');
+const fireflies = document.getElementById('fireflies');
+const BASE_Y = 478;
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+// Curva cuadrática (punto y tangente)
+const quad = (p0, p1, p2, t) => {
+  const u = 1 - t;
+  return { x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x, y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y };
+};
+const quadTan = (p0, p1, p2, t) => {
+  const u = 1 - t;
+  return { x: 2*u*(p1.x - p0.x) + 2*t*(p2.x - p1.x), y: 2*u*(p1.y - p0.y) + 2*t*(p2.y - p1.y) };
+};
+// Ángulo (grados) para que un elemento que apunta hacia arriba siga la tangente
+const angleOf = v => Math.atan2(v.x, -v.y) * 180 / Math.PI;
+
+// Dibuja un trazo que "crece" desde su primer punto
+function growStroke(path, delay, duration) {
+  path.setAttribute('pathLength', '1');
+  path.setAttribute('stroke-dasharray', '1');
+  path.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
+    { duration, delay, easing: 'cubic-bezier(.45,.05,.3,1)', fill: 'both' });
+}
+
+// Hoja que brota escalando desde su base
+function addLeaf(parent, x, y, rot, size, delay, dur, fill = 'url(#leafG)') {
+  const g = el('g', { transform: `translate(${x} ${y}) rotate(${rot})` }, parent);
+  const p = el('path', { d: 'M0,0 C-9,-7 -10,-22 0,-34 C10,-22 9,-7 0,0Z', fill }, g);
+  p.style.transformOrigin = '0px 0px';
+  p.animate([{ transform: 'scale(0)' }, { transform: `scale(${size})` }],
+    { duration: dur, delay, easing: 'cubic-bezier(.34,1.4,.64,1)', fill: 'both' });
+  return p;
+}
+
+// ---------- Pasto ----------
+function grassBlade(parent, x, h, bend, delay) {
+  const sway = el('g', {}, parent);
+  el('path', {
+    d: `M${x - 2.5} 500 Q${x - 2 + bend * .4} ${500 - h * .55} ${x + bend} ${500 - h}
+        Q${x + 2 + bend * .4} ${500 - h * .5} ${x + 2.5} 500Z`,
+    fill: 'url(#grassG)', opacity: .85
+  }, sway);
+  sway.style.transformOrigin = `${x}px 500px`;
+  sway.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }],
+    { duration: 1600 + h * 5, delay, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
+  sway.animate([{ transform: 'rotate(-2deg)' }, { transform: 'rotate(2deg)' }],
+    { duration: rand(3500, 6000), delay: delay + 2500, direction: 'alternate',
+      iterations: Infinity, easing: 'ease-in-out', composite: 'add' });
+}
+
+// ---------- Helecho ----------
+function frond(parent, x0, y0, angle, len, curl, delay) {
+  const a = angle * Math.PI / 180;
+  const p0 = { x: x0, y: y0 };
+  const p1 = { x: x0 + Math.sin(a) * len * .35, y: y0 - Math.cos(a) * len * .85 };
+  const p2 = { x: x0 + Math.sin(a) * len + curl, y: y0 - Math.cos(a) * len * .7 + 12 };
+  const rachis = el('path', {
+    d: `M${p0.x} ${p0.y} Q${p1.x} ${p1.y} ${p2.x} ${p2.y}`,
+    fill: 'none', stroke: '#14808a', 'stroke-width': 1.6, 'stroke-linecap': 'round'
+  }, parent);
+  growStroke(rachis, delay, 1100);
+  const n = 11;
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const pos = quad(p0, p1, p2, t);
+    const rot = angleOf(quadTan(p0, p1, p2, t));
+    const size = (1 - t * .7) * len / 130;
+    for (const side of [-1, 1]) {
+      addLeaf(parent, pos.x, pos.y, rot + side * 62, size, delay + t * 1000, 650, 'url(#fernG)');
+    }
+  }
+  addLeaf(parent, p2.x, p2.y, angleOf(quadTan(p0, p1, p2, 1)), len / 260, delay + 1000, 500, 'url(#fernG)');
+}
+
+// ---------- Flor ----------
+const PETAL = 'M0,0 C-11,-6 -12,-20 0,-27 C12,-20 11,-6 0,0Z';
+
+function plantFlower(parent, { x, h, bend, delay = 0, scale = 1 }) {
+  const g = el('g', {}, parent);
+  const p0 = { x, y: BASE_Y };
+  const p1 = { x: x - bend * .5, y: BASE_Y - h * .5 };
+  const p2 = { x: x + bend, y: BASE_Y - h };
+  const stemDur = 1800 + h * 4;
+
+  // Tallo
+  const stem = el('path', {
+    d: `M${p0.x} ${p0.y} Q${p1.x} ${p1.y} ${p2.x} ${p2.y}`,
+    fill: 'none', stroke: '#2fc9b4', 'stroke-width': 3.2 * scale,
+    'stroke-linecap': 'round'
+  }, g);
+  growStroke(stem, delay, stemDur);
+
+  // Hojas a lo largo del tallo, aparecen conforme sube el tallo
+  const ts = [.22, .38, .54, .7];
+  ts.forEach((t, i) => {
+    const pos = quad(p0, p1, p2, t);
+    const rot = angleOf(quadTan(p0, p1, p2, t));
+    const side = i % 2 === 0 ? -1 : 1;
+    addLeaf(g, pos.x, pos.y, rot + side * 55, (.85 - t * .3) * scale,
+      delay + stemDur * t * .9, 900);
+  });
+
+  // Cabeza de la flor
+  const tip = quadTan(p0, p1, p2, 1);
+  const head = el('g', {
+    transform: `translate(${p2.x} ${p2.y}) rotate(${angleOf(tip) * .6})`
+  }, g);
+  const bloom = el('g', { filter: 'url(#glow)' }, head);
+  const bloomDelay = delay + stemDur - 100;
+
+  const halo = el('circle', { r: 36 * scale, cy: -10 * scale, fill: 'url(#haloG)' }, bloom);
+  halo.style.transformOrigin = '0px 0px';
+  halo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1500, delay: bloomDelay, fill: 'both' });
+  halo.animate([{ opacity: .6 }, { opacity: 1 }],
+    { duration: 2600, delay: bloomDelay + 1500, direction: 'alternate', iterations: Infinity, easing: 'ease-in-out' });
+
+  [-62, 62, -32, 32, 0].forEach((a, i) => {
+    const petal = el('path', {
+      d: PETAL, fill: 'url(#petalG)', stroke: 'rgba(255,160,0,.55)', 'stroke-width': .6
+    }, bloom);
+    petal.style.transformOrigin = '0px 0px';
+    petal.animate([
+      { transform: `rotate(${a * .15}deg) scale(0)` },
+      { transform: `rotate(${a}deg) scale(${scale})` }
+    ], { duration: 1300, delay: bloomDelay + i * 90, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'both' });
+  });
+
+  const center = el('circle', { r: 4.2 * scale, cy: -3 * scale, fill: 'url(#centerG)' }, bloom);
+  center.style.transformOrigin = '0px 0px';
+  center.animate([{ transform: 'scale(0)' }, { transform: 'scale(1)' }],
+    { duration: 700, delay: bloomDelay + 500, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'both' });
+
+  // Balanceo suave de toda la planta una vez crecida
+  g.style.transformOrigin = `${x}px ${BASE_Y}px`;
+  g.animate([{ transform: 'rotate(-1.4deg)' }, { transform: 'rotate(1.4deg)' }],
+    { duration: rand(4200, 6500), delay: delay + stemDur + 1500, direction: 'alternate',
+      iterations: Infinity, easing: 'ease-in-out' });
+  return g;
+}
+
+// ---------- Luciérnagas ----------
+function makeFireflies(n = 42) {
+  fireflies.replaceChildren();
+  for (let i = 0; i < n; i++) {
+    const c = el('circle', {
+      cx: rand(10, 390), cy: rand(120, 480), r: rand(.7, 1.8),
+      fill: Math.random() < .6 ? '#ffe45a' : '#5df0d6'
+    }, fireflies);
+    const dx = rand(-25, 25), dy = rand(40, 120);
+    c.animate([
+      { transform: 'translate(0px,0px)', opacity: 0 },
+      { opacity: .95, offset: .5 },
+      { transform: `translate(${dx}px,${-dy}px)`, opacity: 0 }
+    ], { duration: rand(5000, 10000), delay: rand(1500, 8000), iterations: Infinity, fill: 'backwards' });
+  }
+}
+
+// ---------- Cielo estrellado ----------
+const sky = document.getElementById('sky');
+function makeSky(n = 170) {
+  sky.replaceChildren();
+  const glow = document.createElement('div');
+  glow.className = 'moon-glow';
+  sky.appendChild(glow);
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() < .12 ? rand(2.2, 3.2) : rand(.8, 2);
+    const warm = Math.random();
+    s.style.cssText = `left:${rand(0, 100)}%;top:${Math.pow(Math.random(), 1.3) * 78}%;` +
+      `width:${size}px;height:${size}px;` +
+      `background:${warm < .15 ? '#ffe9b0' : warm < .3 ? '#bfe3ff' : '#ffffff'};` +
+      (size > 2.2 ? 'box-shadow:0 0 6px 1px rgba(255,255,255,.7);' : '');
+    sky.appendChild(s);
+    const base = rand(.35, .95);
+    s.animate([{ opacity: base }, { opacity: base * .15 }, { opacity: base }],
+      { duration: rand(2200, 6000), delay: rand(0, 4000), iterations: Infinity, easing: 'ease-in-out' });
+  }
+}
+
+// Estrella fugaz de vez en cuando
+function shootingStar() {
+  const s = document.createElement('div');
+  const len = rand(80, 140);
+  s.style.cssText = `position:absolute;left:${rand(10, 80)}%;top:${rand(2, 35)}%;width:${len}px;height:2px;` +
+    'background:linear-gradient(90deg,rgba(255,255,255,0),#fff);border-radius:2px;' +
+    'filter:drop-shadow(0 0 4px #fff);transform-origin:100% 50%;';
+  sky.appendChild(s);
+  const dx = rand(220, 360), dy = dx * rand(.35, .6);
+  const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  s.animate([
+    { transform: `translate(0,0) rotate(${ang}deg)`, opacity: 0 },
+    { opacity: 1, offset: .15 },
+    { transform: `translate(${dx}px,${dy}px) rotate(${ang}deg)`, opacity: 0 }
+  ], { duration: 1100, easing: 'ease-out' }).onfinish = () => s.remove();
+}
+setInterval(() => { if (Math.random() < .7) shootingStar(); }, 6000);
+
+// ---------- Escena ----------
+let layers = {};
+function build() {
+  garden.replaceChildren();
+  const back = el('g', {}, garden);
+  const flowers = el('g', {}, garden);
+  const front = el('g', {}, garden);
+  layers = { back, flowers, front };
+
+  for (let i = 0; i < 28; i++) {
+    grassBlade(back, rand(6, 394), rand(60, 210), rand(-28, 28), rand(0, 1400));
+  }
+
+  const plan = [
+    { x: 200, h: 335, bend: 6,   delay: 700 },
+    { x: 172, h: 255, bend: -58, delay: 1300 },
+    { x: 232, h: 275, bend: 62,  delay: 1900 },
+    { x: 118, h: 150, bend: -34, delay: 2900, scale: .8 },
+    { x: 288, h: 140, bend: 32,  delay: 3300, scale: .8 }
+  ];
+  plan.forEach(f => plantFlower(flowers, f));
+
+  // Helecho al frente
+  const fronds = [
+    [-82, 90, -10], [-58, 105, -14], [-30, 95, -6], [-8, 70, 0],
+    [12, 75, 0], [34, 100, 6], [58, 108, 14], [84, 92, 10]
+  ];
+  fronds.forEach(([ang, len, curl], i) => frond(front, 198 + rand(-8, 8), 486, ang, len, curl, 300 + i * 160));
+
+  for (let i = 0; i < 8; i++) {
+    const side = i < 4 ? rand(0, 70) : rand(330, 400);
+    grassBlade(front, side, rand(70, 170), rand(-20, 20), rand(500, 1600));
+  }
+  makeFireflies();
+}
+
+// Clic para sembrar una flor nueva (máximo 13 flores en total)
+const MAX_FLORES = 13;
+svg.addEventListener('pointerdown', e => {
+  if (layers.flowers.childElementCount >= MAX_FLORES) return;
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  plantFlower(layers.flowers, {
+    x: clamp(p.x, 20, 380), h: rand(110, 290), bend: rand(-50, 50),
+    delay: 0, scale: rand(.8, 1)
+  });
+});
+document.getElementById('replay').addEventListener('click', build);
+addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'r' && document.body.classList.contains('escena')) build();
+});
+
+// ---------- Portada, música y navegación ----------
+const FOTO = 'imagen2.jpg';                       // <- cambia el nombre si tu imagen se llama distinto
+const MENSAJE = 'Bebé, tengo algo para ti, te quiero beba';
+const cover = document.getElementById('cover');
+const msg = document.getElementById('msg');
+const btnContinuar = document.getElementById('continuar');
+const musica = document.getElementById('musica');
+const btnMusica = document.getElementById('btnMusica');
+const photo = document.getElementById('photo');
+const foto = document.getElementById('foto');
+let typeId = 0, clearId = 0;
+
+// Foto: intenta cargar foto.jpg; si no existe, deja elegirla desde el dispositivo
+foto.onload = () => photo.classList.add('tiene');
+foto.onerror = () => photo.classList.remove('tiene');
+foto.src = FOTO;
+photo.addEventListener('click', () => document.getElementById('fileFoto').click());
+document.getElementById('fileFoto').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) foto.src = URL.createObjectURL(f);
+});
+
+// Corazones flotando en la portada
+(function hearts() {
+  const box = document.getElementById('hearts');
+  for (let i = 0; i < 20; i++) {
+    const h = document.createElement('span');
+    h.className = 'heart';
+    h.textContent = Math.random() < .7 ? '♥' : '✦';
+    h.style.cssText = `left:${rand(0, 100)}%;font-size:${rand(10, 26)}px;` +
+      `animation-duration:${rand(9, 18)}s;animation-delay:${rand(0, 12)}s;`;
+    box.appendChild(h);
+  }
+})();
+
+// Mensaje que se escribe solo
+function typeMessage() {
+  const id = ++typeId;
+  let i = 0;
+  msg.textContent = '';
+  btnContinuar.classList.remove('show');
+  (function step() {
+    if (id !== typeId) return;
+    if (i <= MENSAJE.length) {
+      msg.textContent = MENSAJE.slice(0, i++);
+      setTimeout(step, rand(70, 130));
+    } else {
+      setTimeout(() => { if (id === typeId) btnContinuar.classList.add('show'); }, 500);
+    }
+  })();
+  // empieza a escribir cuando la tarjeta ya apareció
+}
+
+function irEscena() {
+  typeId++;
+  clearTimeout(clearId);
+  document.body.classList.add('escena');
+  build();
+  musica.play().catch(() => {});   // el clic en "Continuar" permite el audio automático
+}
+
+function irInicio() {
+  document.body.classList.remove('escena');
+  musica.pause();
+  clearId = setTimeout(() => garden.replaceChildren(), 1500);
+  cover.classList.remove('go');
+  void cover.offsetWidth;
+  cover.classList.add('go');
+  setTimeout(typeMessage, 1400);
+}
+
+function actualizarBotonMusica() { btnMusica.textContent = musica.paused ? '🔇' : '🔊'; }
+musica.addEventListener('play', actualizarBotonMusica);
+musica.addEventListener('pause', actualizarBotonMusica);
+btnMusica.addEventListener('click', () => {
+  if (musica.paused) musica.play().catch(() => {}); else musica.pause();
+});
+btnContinuar.addEventListener('click', irEscena);
+document.getElementById('btnInicio').addEventListener('click', irInicio);
+
+makeSky();
+actualizarBotonMusica();
+setTimeout(typeMessage, 1400);
+</script>
+</body>
+</html>
